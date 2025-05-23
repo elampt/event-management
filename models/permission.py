@@ -4,7 +4,6 @@ from database.connection import Base
 import enum
 
 class RoleEnum(str, enum.Enum):
-    owner = "Owner"
     editor = "Editor"
     viewer = "Viewer"
 

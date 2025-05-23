@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from routers.auth import router as auth_router
 from routers.event import router as event_router
+from routers.collaboration import router as collaboration_router
 from database.connection import engine
 from database.connection import Base
 import json
@@ -34,6 +35,7 @@ async def msgpack_middleware(request: Request, call_next):
 # Include the routers
 app.include_router(auth_router)
 app.include_router(event_router)
+app.include_router(collaboration_router)
 
 
 @app.get("/")

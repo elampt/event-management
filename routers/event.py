@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from database.connection import get_db
-from models import Event, User
+from models import Event, User, EventPermission, RoleEnum
 from schemas.event import EventCreate, EventResponse, EventOccurence, EventUpdate, EventBatchCreate
 from auth.jwt import get_current_user
 from dateutil.rrule import rrulestr
@@ -87,10 +87,9 @@ async def get_event(id:int, db: Session = Depends(get_db), current_user: User = 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
     
     if db_event.owner_id != current_user.id:
-        # Optionally, check for explicit permission here
-        # permission = db.query(EventPermission).filter_by(event_id=event_id, user_id=current_user.id).first()
-        # if not permission:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have to access this event")
+        permission = db.query(EventPermission).filter_by(event_id=id, user_id=current_user.id).first()
+        if not permission:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have to access this event")
     
     occurences = expand_occurrences(db_event)
     return EventResponse.model_validate({**db_event.__dict__, "occurences": occurences})
@@ -106,8 +105,14 @@ async def list_events(
     is_recurring: Optional[bool] = Query(None, description="Filter by recurring events"),
     search: Optional[str] = Query(None, description="Search by title or description")
 ):
-    query = db.query(Event).filter(Event.owner_id == current_user.id)
-    # Need to include other permissions logic here
+    # Events owned by the current user
+    owned_query = db.query(Event).filter(Event.owner_id == current_user.id)
+    # Events shared with the current user
+    shared_event_ids = db.query(EventPermission.event_id).filter(EventPermission.user_id == current_user.id)
+    shared_query = db.query(Event).filter(Event.id.in_(shared_event_ids))
+
+    # Combine both queries
+    query = owned_query.union(shared_query)
 
     if is_recurring is not None:
         query = query.filter(Event.is_recurring == is_recurring)
@@ -133,7 +138,9 @@ async def update_event(id: int, event_update: EventUpdate, db: Session = Depends
     if not db_event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
     if db_event.owner_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to update this event")
+        permission = db.query(EventPermission).filter_by(event_id=id, user_id=current_user.id, role= RoleEnum.editor).first()
+        if not permission:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to update this event")
     
     # Update the event with the new values provided (Allows for partial updates)
     update_data = event_update.model_dump(exclude_unset=True) # Get only the fields that were provided, convert to dict
