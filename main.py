@@ -1,5 +1,15 @@
-from fastapi import FastAPI, Request, Response
+# Standard library imports
+from fastapi import FastAPI, Request, Response, HTTPException
+import json
 from fastapi.responses import JSONResponse
+
+# Third-party imports
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.middleware import SlowAPIMiddleware
+import msgpack
+
+# Local imports
 from routers.auth import auth_router
 from routers.event import event_router
 from routers.collaboration import collaboration_router
@@ -7,17 +17,12 @@ from routers.version import version_router
 from routers.changelog import changelog_router
 from database.connection import engine
 from database.connection import Base
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
-import json
-import msgpack
+from schemas.response import APIResponse
 
 # Create a FastAPI instance
 app = FastAPI()
 
-# Create all tables (development only; need to use Alembic for production)
+# Create all tables (development only)
 Base.metadata.create_all(bind=engine)
 
 # Rate limiting setup
@@ -44,7 +49,16 @@ async def msgpack_middleware(request: Request, call_next):
         return Response(content=msgpack_bytes, media_type="application/msgpack")
     return response
 
-
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=APIResponse(
+            success=False,
+            message=exc.detail,
+            data=None
+        ).model_dump()
+    )
 
 # Include the routers
 app.include_router(auth_router)
@@ -53,7 +67,7 @@ app.include_router(collaboration_router)
 app.include_router(version_router)
 app.include_router(changelog_router)
 
-
+# Root endpoint
 @app.get("/")
 async def root():
     return {"message": "Hello World"}

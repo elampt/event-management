@@ -1,12 +1,13 @@
-from jose import jwt
-from datetime import datetime, timedelta
-import schemas, database.connection as connection, models
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from datetime import datetime, timedelta, timezone
+
+import schemas, database.connection as connection, models
 from auth.config import settings
-from jose.exceptions import JWTError, ExpiredSignatureError
-from typing import Annotated
+
+from jose.exceptions import ExpiredSignatureError
+from jose import jwt
 
 
 SECRET_KEY = settings.secret_key
@@ -19,7 +20,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
 
-    expire = datetime.now() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire}) # Add expiration time to the token
 
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)

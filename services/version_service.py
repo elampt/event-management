@@ -2,6 +2,7 @@ from fastapi import HTTPException, status
 from models import Event, EventVersion, EventPermission, EventChangelog
 from deepdiff import DeepDiff
 from services.event_service import assign_version_data_to_event
+from schemas.version import EventVersionSchema
 
 # Service to retrieve the version history of an event
 def get_event_version_service(id, version_id, db, current_user):
@@ -13,7 +14,7 @@ def get_event_version_service(id, version_id, db, current_user):
     event = db.query(Event).filter(Event.id == id).first()
     if not event or (event.owner_id != current_user.id and not db.query(EventPermission).filter_by(event_id = id, user_id = current_user.id).first()):
         raise HTTPException(status_code=403, detail="Permission denied")
-    return version
+    return EventVersionSchema.model_validate(version)
 
 # Service to rollback an event to a specific version
 def rollback_event_service(id, version_id, db, current_user):
@@ -56,7 +57,7 @@ def rollback_event_service(id, version_id, db, current_user):
         db.add(change_log_entry)
         db.commit()
         db.refresh(new_version)
-        return new_version
+        return EventVersionSchema.model_validate(new_version)
     except Exception as e:
         db.rollback()
         print("Error during rollback:", e)
