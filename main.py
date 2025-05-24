@@ -3,8 +3,14 @@ from fastapi.responses import JSONResponse
 from routers.auth import router as auth_router
 from routers.event import router as event_router
 from routers.collaboration import router as collaboration_router
+from routers.version import router as version_router
+from routers.changelog import router as changelog_router
 from database.connection import engine
 from database.connection import Base
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 import json
 import msgpack
 
@@ -13,6 +19,14 @@ app = FastAPI()
 
 # Create all tables (development only; need to use Alembic for production)
 Base.metadata.create_all(bind=engine)
+
+# Rate limiting setup
+limiter = Limiter(key_func=get_remote_address, default_limits=["15/minute", "1000/day"])
+app.state.limiter = limiter
+
+# Register the rate limit exceeded handler
+app.add_middleware(SlowAPIMiddleware)
+
 
 # Middleware for Message Pack response
 @app.middleware("http")
@@ -36,6 +50,8 @@ async def msgpack_middleware(request: Request, call_next):
 app.include_router(auth_router)
 app.include_router(event_router)
 app.include_router(collaboration_router)
+app.include_router(version_router)
+app.include_router(changelog_router)
 
 
 @app.get("/")

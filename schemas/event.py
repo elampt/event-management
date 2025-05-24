@@ -1,6 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 class EventCreate(BaseModel):
     title: str
@@ -17,6 +17,10 @@ class EventBatchCreate(BaseModel):
 class EventOccurence(BaseModel):
     start_time: datetime
     end_time: datetime
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        }
 
 class EventResponse(BaseModel):
     id: int
@@ -32,6 +36,9 @@ class EventResponse(BaseModel):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        }
 
 class EventUpdate(BaseModel):
     title: Optional[str] = None
