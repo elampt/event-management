@@ -15,29 +15,29 @@ from services.event_service import (
                                     delete_event_service
                                     )
 
-router = APIRouter(prefix="/api/events", tags=["Event Management"])
+event_router = APIRouter(prefix="/api/events", tags=["Event Management"])
         
     
 # Create a new event
-@router.post("/", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
+@event_router.post("/", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
 async def create_event(event: EventCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return create_event_service(event, db, current_user)
 
 
 # Create multiple events in a batch
-@router.post("/batch", response_model=list[EventResponse], status_code=status.HTTP_201_CREATED)
+@event_router.post("/batch", response_model=list[EventResponse], status_code=status.HTTP_201_CREATED)
 async def create_events_batch(batch: EventBatchCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return batch_create_events_service(batch, db, current_user)
 
 
 # Get an event by ID
-@router.get("/{id}", response_model=EventResponse)
+@event_router.get("/{id}", response_model=EventResponse)
 async def get_event(id:int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return get_event_service(id, db, current_user)
 
 
 # Get all events for the current user
-@router.get("/", response_model = list[EventResponse])
+@event_router.get("/", response_model = list[EventResponse])
 async def list_events(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -52,12 +52,12 @@ async def list_events(
 
 
 # Update an event
-@router.put("/{id}", response_model=EventResponse)
+@event_router.put("/{id}", response_model=EventResponse)
 async def update_event(id: int, event_update: EventUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return update_event_service(id, event_update, db, current_user)
 
 
 # Delete an event
-@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+@event_router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_event(id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return delete_event_service(id, db, current_user)

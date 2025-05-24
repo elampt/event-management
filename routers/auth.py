@@ -8,13 +8,13 @@ from auth.password import hash_password, verify_password  # Import your password
 from fastapi.security import OAuth2PasswordRequestForm
 from services.auth_service import register_service, login_service
 
-router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+auth_router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
-@router.post("/register", response_model=UserWithToken)
+@auth_router.post("/register", response_model=UserWithToken)
 async def register(user: UserCreate, db: Session = Depends(get_db)):
     return register_service(user, db)
 
 
-@router.post("/login", response_model=UserWithToken)
+@auth_router.post("/login", response_model=UserWithToken)
 async def login(request: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     return login_service(request, db)

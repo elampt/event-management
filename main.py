@@ -1,10 +1,10 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
-from routers.auth import router as auth_router
-from routers.event import router as event_router
-from routers.collaboration import router as collaboration_router
-from routers.version import router as version_router
-from routers.changelog import router as changelog_router
+from routers.auth import auth_router
+from routers.event import event_router
+from routers.collaboration import collaboration_router
+from routers.version import version_router
+from routers.changelog import changelog_router
 from database.connection import engine
 from database.connection import Base
 from slowapi import Limiter, _rate_limit_exceeded_handler
