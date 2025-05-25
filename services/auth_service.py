@@ -1,8 +1,9 @@
 from fastapi import HTTPException, status
 from models import User
-from schemas import UserCreate, UserResponse, UserWithToken
+from schemas import UserResponse
 from auth.jwt import create_access_token
 from auth.password import hash_password, verify_password
+from datetime import datetime, timezone
 
 # Service to handle user authentication and registration
 def register_service(user, db):
@@ -37,3 +38,21 @@ def login_service(request, db):
         "access_token": access_token, 
         "token_type": "bearer"
         }
+
+# Service to handle token refresh
+def refresh_token_service(current_user, db):
+    access_token = create_access_token(data={"user_id": current_user.id})
+    user_response = UserResponse.model_validate(current_user)
+    return {
+        "user": user_response,
+        "access_token": access_token, 
+        "token_type": "bearer"
+    }
+
+# Service to logout a user
+def logout_service(current_user, db):
+    """
+    We've used stateless JWT tokens for authentication, so we don't have a server-side session to invalidate.
+    The logout is supposed to be handled by the client by removing the token from local storage or cookies.
+    """
+    pass

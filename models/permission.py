@@ -6,6 +6,7 @@ import enum
 class RoleEnum(str, enum.Enum):
     editor = "Editor"
     viewer = "Viewer"
+    owner = "Owner"
 
 class EventPermission(Base):
     __tablename__ = "event_permissions"
