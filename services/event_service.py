@@ -141,6 +141,7 @@ def create_event_service(event: EventCreate, db, current_user):
             change_note="Initial version"
         )
         db.add(initial_version)
+        db.flush()  # Ensure the version is created before changelog
 
         changelog_entry = EventChangelog(
             event_id=db_event.id,
