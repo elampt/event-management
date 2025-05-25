@@ -1,11 +1,15 @@
-from datetime import datetime, timezone
-from dateutil.rrule import rrulestr
-from schemas.event import EventOccurence, EventCreate, EventResponse
-from models import EventPermission, Event, EventVersion, EventChangelog, RoleEnum
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import HTTPException, status
-from typing import List, Optional
+from datetime import datetime, timezone
+import json
+
+from schemas.event import EventOccurence, EventCreate, EventResponse
+from models import EventPermission, Event, EventVersion, EventChangelog, RoleEnum
+from services.redis_client import redis_client
+
 from deepdiff import DeepDiff
+from dateutil.rrule import rrulestr
+
 
 # Function to ensure that the datetime is in UTC
 def ensure_utc(dt):
@@ -107,6 +111,9 @@ def assign_version_data_to_event(event, data):
 
 # Create a new event and handle conflicts
 def create_event_service(event: EventCreate, db, current_user):
+    if event.start_time >= event.end_time:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="End time must be after start time")
+    
     if has_event_conflict(db, current_user.id, event.start_time, event.end_time):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Event time conflicts with an existing event")
     try:
@@ -141,6 +148,12 @@ def create_event_service(event: EventCreate, db, current_user):
         db.add(changelog_entry)
         db.commit()
         occurences = expand_occurrences(db_event)
+        
+        # Invalidate cache for all events of the user
+        pattern = f"events:user:{current_user.id}:*"
+        for key in redis_client.scan_iter(pattern):
+            redis_client.delete(key)
+        
         return EventResponse.model_validate({**db_event.__dict__, "occurences": occurences})
     except SQLAlchemyError as e:
         db.rollback()
@@ -154,6 +167,9 @@ def batch_create_events_service(batch, db, current_user):
     try:
         # First check for conflicts across all events in the batch
         for event in batch.events:
+            if event.start_time >= event.end_time:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="End time must be after start time")
+            
             if has_event_conflict(db, current_user.id, event.start_time, event.end_time):
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Event time conflicts with an existing event: {event.title}")
 
@@ -191,7 +207,13 @@ def batch_create_events_service(batch, db, current_user):
             occurences = expand_occurrences(db_event)
             created_events.append(EventResponse.model_validate({**db_event.__dict__, "occurences": occurences}))
         db.commit()
+        
+        # Invalidate cache for all events of the user
+        pattern = f"events:user:{current_user.id}:*"
+        for key in redis_client.scan_iter(pattern):
+            redis_client.delete(key)
         return created_events
+    
     except SQLAlchemyError as e:
         db.rollback()
         print("Error creating events batch:", e)
@@ -200,6 +222,12 @@ def batch_create_events_service(batch, db, current_user):
 
 # Function to get event by ID with permission checks
 def get_event_service(id, db, current_user):
+    cache_key = f"event:{id}:user:{current_user.id}"
+    cached = redis_client.get(cache_key)
+    if cached:
+        # Deserialize the cached data
+        return EventResponse.model_validate(json.loads(cached))
+    
     db_event = db.query(Event).filter(Event.id == id).first()
     if not db_event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
@@ -210,11 +238,21 @@ def get_event_service(id, db, current_user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have to access this event")
     
     occurences = expand_occurrences(db_event)
-    return EventResponse.model_validate({**db_event.__dict__, "occurences": occurences})
+    event_response = EventResponse.model_validate({**db_event.__dict__, "occurences": occurences})
+    # Cache the event response for 5 minutes
+    redis_client.setex(cache_key, 300, event_response.model_dump_json())  # Cache for 5 minutes
+    return event_response
 
 
 # Function to get all events with optional filters
 def list_events_service(db, current_user, skip, limit, is_recurring, search, start_date, end_date):
+    cache_key = f"events:user:{current_user.id}:skip:{skip}:limit:{limit}:recurring:{is_recurring}:search:{search}:start_date:{start_date}:end_date:{end_date}"
+    cached = redis_client.get(cache_key)
+    
+    if cached:
+        # Deserialize the cached data
+        return [EventResponse.model_validate(event) for event in json.loads(cached)]
+    
     # Events owned by the current user
     owned_query = db.query(Event).filter(Event.owner_id == current_user.id)
     # Events shared with the current user
@@ -262,6 +300,8 @@ def update_event_service(id, event_update, db, current_user):
         if "start_time" in update_data or "end_time" in update_data:
             new_start = update_data.get("start_time", db_event.start_time)
             new_end = update_data.get("end_time", db_event.end_time)
+            if new_start >= new_end:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="End time must be after start time")
             if has_event_conflict(db, current_user.id, new_start, new_end, exclude_event_id=id):
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Event time conflicts with an existing event")
         for key, value in update_data.items():
@@ -288,6 +328,12 @@ def update_event_service(id, event_update, db, current_user):
         db.add(changelog_entry)
         db.commit()
         occurences = expand_occurrences(db_event)
+
+        # Invalidate cache for all events of the user
+        pattern = f"events:user:{current_user.id}:*"
+        for key in redis_client.scan_iter(pattern):
+            redis_client.delete(key)
+
         return EventResponse.model_validate({**db_event.__dict__, "occurences": occurences})
     except SQLAlchemyError as e:
         db.rollback()
@@ -305,4 +351,10 @@ def delete_event_service(id, db, current_user):
     
     db.delete(db_event)
     db.commit()
+
+    # Invalidate cache for all events of the user
+    pattern = f"events:user:{current_user.id}:*"
+    for key in redis_client.scan_iter(pattern):
+        redis_client.delete(key)
+
     return {"detail": "Event deleted successfully"}
