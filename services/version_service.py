@@ -6,7 +6,7 @@ from schemas.version import EventVersionSchema
 
 # Service to retrieve the version history of an event
 def get_event_version_service(id, version_id, db, current_user):
-    version = db.query(EventVersion).filter_by(event_id=id, id=version_id).first()
+    version = db.query(EventVersion).filter_by(event_id=id, version=version_id).first()
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
     

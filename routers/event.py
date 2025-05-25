@@ -27,7 +27,7 @@ async def create_event(event: EventCreate, db: Session = Depends(get_db), curren
 
 
 # Create multiple events in a batch
-@event_router.post("/batch", response_model=list[EventResponse], status_code=status.HTTP_201_CREATED)
+@event_router.post("/batch", response_model=APIResponse[list[EventResponse]], status_code=status.HTTP_201_CREATED)
 async def create_events_batch(batch: EventBatchCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     response = batch_create_events_service(batch, db, current_user)
     return APIResponse(success=True, message="Events created successfully", data=response)

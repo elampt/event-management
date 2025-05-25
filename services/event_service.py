@@ -37,6 +37,7 @@ def expand_occurrences(event: Event, count: int = 10):
 
 def expand_occurrences_until(event: Event, until: datetime):
     """Expand occurrences of a recurring event up to a given datetime."""
+    until = ensure_utc(until)
     if event.is_recurring and event.recurrence_pattern:
         start_time = ensure_utc(event.start_time)
         rule = rrulestr(event.recurrence_pattern, dtstart=start_time)
@@ -56,6 +57,8 @@ def has_event_conflict(db, user_id, start_time, end_time, exclude_event_id=None)
     """
     Returns True if the given time range conflicts with any event (including recurring) for the user.
     """
+    start_time = ensure_utc(start_time)
+    end_time = ensure_utc(end_time)
     # Events owned by the user
     owned_query = db.query(Event).filter(Event.owner_id == user_id)
     # Events shared with the user
